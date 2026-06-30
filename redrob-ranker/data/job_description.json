@@ -1,0 +1,66 @@
+{
+  "job_id": "JD-REDROB-SAE-2026",
+  "title": "Senior AI Engineer",
+  "company": "Redrob AI",
+  "department": "AI & Machine Learning",
+  "location": {
+    "primary": "San Francisco, CA",
+    "remote_policy": "hybrid",
+    "acceptable_locations": ["San Francisco, CA", "New York, NY", "Seattle, WA", "Remote (US)"],
+    "relocation_assistance": true
+  },
+  "experience_requirements": {
+    "minimum_years": 5,
+    "preferred_years": 7,
+    "maximum_years": null
+  },
+  "description": "Redrob AI is seeking a Senior AI Engineer to design, build, and deploy production-grade AI systems that power our intelligent recruitment platform. You will work at the intersection of NLP, information retrieval, and ML infrastructure to build candidate-matching engines, resume understanding pipelines, and ranking algorithms that serve millions of users.",
+  "responsibilities": [
+    "Design and implement production ML pipelines for candidate ranking and matching",
+    "Build and fine-tune transformer-based NLP models for resume parsing, skill extraction, and semantic matching",
+    "Develop and maintain scalable inference services handling high-throughput, low-latency requirements",
+    "Collaborate with product and data teams to define ML-driven features and evaluation metrics",
+    "Mentor junior ML engineers and contribute to engineering best practices",
+    "Drive experimentation culture: design A/B tests, build evaluation harnesses, and analyze results"
+  ],
+  "required_skills": [
+    "Python (5+ years, production-level)",
+    "PyTorch or TensorFlow (3+ years, model development and training)",
+    "NLP / Transformers / LLMs (2+ years, fine-tuning and deployment)",
+    "ML Systems Design (production pipelines, model serving, monitoring)",
+    "Cloud Platforms (AWS or GCP, including managed ML services)",
+    "Strong software engineering fundamentals (testing, CI/CD, code review)"
+  ],
+  "preferred_skills": [
+    "Experience with sentence-transformers and semantic search",
+    "RAG (Retrieval-Augmented Generation) systems",
+    "MLOps tools (MLflow, Kubeflow, Weights & Biases)",
+    "Distributed training and multi-GPU optimization",
+    "Experience in HR-tech, recruitment, or talent platforms",
+    "Publications at top ML/NLP venues"
+  ],
+  "rejected_backgrounds": [
+    "Candidates with exclusively non-technical backgrounds (e.g., purely sales, marketing, or administrative roles)",
+    "Candidates whose ML experience is limited to academic coursework or MOOCs without professional application",
+    "Candidates with significant unexplained career gaps (>18 months) without evidence of continued learning",
+    "Candidates whose primary expertise is blockchain/Web3 with minimal demonstrable ML engineering experience"
+  ],
+  "education": {
+    "minimum": "Bachelor's degree in Computer Science, Machine Learning, or related field",
+    "preferred": "Master's or PhD in Machine Learning, NLP, or related field"
+  },
+  "compensation": {
+    "salary_range": "$180,000 - $260,000",
+    "equity": true,
+    "benefits": ["Health/dental/vision", "401(k) matching", "Unlimited PTO", "Learning budget"]
+  },
+  "interview_process": [
+    "Recruiter screen (30 min)",
+    "Technical phone screen — ML fundamentals (60 min)",
+    "System design round — ML systems (60 min)",
+    "Coding round — Python + ML (90 min)",
+    "Hiring manager + culture fit (45 min)"
+  ],
+  "posted_date": "2026-06-15",
+  "application_deadline": "2026-08-15"
+}

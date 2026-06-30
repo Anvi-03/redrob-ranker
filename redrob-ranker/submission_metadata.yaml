@@ -1,0 +1,7 @@
+# Submission metadata for the Redrob Ranker project
+project_name: redrob-ranker
+version: "0.1.0"
+author: "Redrob AI Team"
+description: "AI-powered candidate ranking and scoring system"
+entry_point: sandbox_app.py
+python_version: ">=3.9"

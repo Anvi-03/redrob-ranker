@@ -1,0 +1,10 @@
+pandas
+numpy
+sentence-transformers
+lightgbm
+pyarrow
+pyyaml
+jsonschema
+streamlit
+pytest
+scikit-learn
