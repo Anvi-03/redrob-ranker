@@ -31,9 +31,23 @@ This project uses standard data science libraries and runs purely locally. It re
 
 ## 🚀 Running the Production Pipeline
 
-The pipeline is split into three main scripts. Run them sequentially from the `src/` directory.
+### Option A: Fast Scoring (Generate Submission Directly)
+Since the `artifacts/reranker_model.txt` is already committed to the repository, you do **not** need to retrain the model. You can generate the submission CSV immediately.
 
-### Step 1: Generate the Training Dataset
+**Important:** Before running this step, ensure that the massive 100k `candidates.jsonl` file is placed directly in the **root folder** of the project (`resume-predictor/candidates.jsonl`).
+
+```bash
+cd src
+OMP_NUM_THREADS=1 python3 scoring.py
+```
+*Outputs: `submission.csv` (in the root directory)*
+
+---
+
+### Option B: Full Pipeline (Retraining from Scratch)
+If you want to test the entire process from generating the synthetic training labels all the way to scoring, follow these steps sequentially:
+
+**Step 1: Generate the Training Dataset**
 This script scans the 100k candidates, applies strict heuristic rules derived directly from the Job Description, and generates a diverse dataset of 1,000 auto-labeled candidates (0.0 to 3.0 scale). It actively detects impossible profiles (honeypots) and gives them a score of `0.0`.
 
 ```bash
@@ -42,22 +56,21 @@ python3 generate_training_candidates.py
 ```
 *Outputs: `data/training_candidates_labeled.csv`*
 
-### Step 2: Train the Reranker Model
+**Step 2: Train the Reranker Model**
 This script extracts numerical features from the labeled candidates and trains a `lambdarank` LightGBM model. It performs 5-fold cross-validation, reports NDCG metrics, and saves the final model artifacts.
 
 *(Note: On macOS ARM / Apple Silicon, LightGBM OpenMP might crash silently. We use `OMP_NUM_THREADS=1` to ensure stability.)*
 
 ```bash
+cd src
 OMP_NUM_THREADS=1 python3 train_reranker.py
 ```
 *Outputs:*
 - *Model Weights: `artifacts/reranker_model.txt`*
 - *Training Report: `artifacts/reranker_training_report.md`*
 
-### Step 3: Score and Generate Submission
-This script applies the trained LightGBM model across all 100,000 candidates.
-
-**Important:** Before running this step, ensure that the `candidates.jsonl` file containing the 100k candidates is placed directly in the **root folder** of the project (`resume-predictor/candidates.jsonl`).
+**Step 3: Score and Generate Submission**
+Finally, apply the newly trained model across all 100k candidates. Ensure `candidates.jsonl` is in the root folder.
 
 ```bash
 cd src
