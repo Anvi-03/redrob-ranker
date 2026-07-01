@@ -642,7 +642,6 @@ def generate_reasoning(cand, features, score, rank):
     skills = cand.get('skills', [])
     signals = cand.get('redrob_signals', {})
     
-    title = profile.get('current_title', 'Unknown Role')
     yoe = profile.get('years_of_experience', 0)
     company = profile.get('current_company', 'Unknown Company')
     if not company:
@@ -653,55 +652,63 @@ def generate_reasoning(cand, features, score, rank):
                   if s.get('proficiency') in ('advanced', 'expert')][:5]
     skill_str = ", ".join(adv_skills[:3]) if adv_skills else "core engineering skills"
 
-    # Determine match reason
-    match_reasons = []
-    if features.get('retrieval_ranking_skills', 0) > 0.6:
-        match_reasons.append(f"expertise in {skill_str} and direct experience relevant to retrieval and ranking systems")
-    elif features.get('must_have_skills', 0) > 0.4:
-        match_reasons.append(f"expertise in {skill_str} and related experience relevant to retrieval and ranking systems")
+    # 1. Match Level
+    if rank <= 5:
+        match_level = "Excellent"
+    elif rank <= 25:
+        match_level = "Strong"
+    elif rank <= 50:
+        match_level = "Good"
+    elif rank <= 85:
+        match_level = "Partial"
     else:
-        match_reasons.append(f"expertise in {skill_str} and transferable experience")
-        
-    match_str = match_reasons[0]
+        match_level = "Weak"
 
-    # Additional strengths
+    # 2. Strengths
     strengths = []
+    if features.get('retrieval_ranking_skills', 0) > 0.6:
+        strengths.append(f"deep expertise in {skill_str} for retrieval systems")
+    elif features.get('must_have_skills', 0) > 0.4:
+        strengths.append(f"solid foundation in {skill_str}")
+        
     if features.get('career_ml_evidence', 0) > 0.5:
         strengths.append("production ML deployment")
     if features.get('evaluation_metrics', 0) > 0.5:
         strengths.append("ranking evaluation")
     if features.get('product_company', 0) > 0.4:
-        strengths.append("product company background")
+        strengths.append(f"experience at product companies (e.g. {company})")
         
-    strengths_str = ""
-    if strengths:
-        if len(strengths) > 1:
-            strengths_str = f" Additional strengths include {', '.join(strengths[:-1])} and {strengths[-1]}."
-        else:
-            strengths_str = f" Additional strengths include {strengths[0]}."
+    if not strengths:
+        strengths.append("transferable software engineering experience")
+        
+    strengths_str = "Strengths include " + ", ".join(strengths) + "."
 
-    # Concerns
+    # 3. Concerns / Drawbacks
     concerns = []
     notice = signals.get('notice_period_days', 90)
     if notice > 60:
-        concerns.append(f"Extended Notice Period ({notice} days)")
+        concerns.append(f"extended notice period ({notice} days)")
     if yoe < 4:
-        concerns.append("Junior Profile")
+        concerns.append("junior profile")
     elif yoe > 12:
-        concerns.append("Over-experience")
+        concerns.append("over-experience for IC role")
     
     if features.get('must_have_skills', 0) < 0.3:
-        concerns.append("Missing core skills")
+        concerns.append("missing core retrieval skills")
     if features.get('consulting_only', 0) > 0.5:
-        concerns.append("Consulting-only background")
+        concerns.append("consulting-only background")
     if features.get('pure_research', 0) > 0.5:
-        concerns.append("Academic/Research only")
+        concerns.append("purely academic/research focus")
+    if features.get('wrong_domain', 0) > 0.5:
+        concerns.append("domain mismatch (e.g., CV/Speech instead of NLP)")
         
     concerns_str = ""
     if concerns:
-        concerns_str = f" Concerns: {', '.join(concerns)}."
+        concerns_str = f" Drawbacks: {', '.join(concerns)}."
+    elif rank > 25:
+        concerns_str = " Drawbacks: weaker overall alignment compared to top candidates."
 
-    reasoning = f"{title} with {yoe:.1f} years of experience, currently at {company}. Strong match due to {match_str}.{strengths_str}{concerns_str}"
+    reasoning = f"{match_level} match. {strengths_str}{concerns_str}"
 
     return reasoning
 
