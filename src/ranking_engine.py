@@ -19,28 +19,41 @@ from datetime import datetime
 # JD-DERIVED TAXONOMY
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# The JD literally says you MUST have these
-MUST_HAVE_SKILLS = {
-    'embeddings', 'embedding', 'sentence-transformers', 'sentence transformers',
-    'openai embeddings', 'bge', 'e5',
+# High-priority retrieval and ranking specific skills
+RETRIEVAL_RANKING_SKILLS = {
     'retrieval', 'rag', 'retrieval-augmented generation', 'semantic search',
     'hybrid search', 'vector search', 'bm25', 'dense retrieval',
     'ranking', 'learning to rank', 're-ranking', 'reranking',
-    'llm', 'llms', 'large language models', 'large language model',
     'pinecone', 'weaviate', 'qdrant', 'milvus', 'opensearch',
     'elasticsearch', 'elastic search', 'faiss', 'chroma', 'chromadb', 'pgvector',
-    'ndcg', 'mrr', 'map', 'a/b testing', 'evaluation framework',
+    'embeddings', 'embedding', 'sentence-transformers', 'sentence transformers',
+    'openai embeddings', 'bge', 'e5',
 }
 
+EVALUATION_METRICS = {
+    'ndcg', 'mrr', 'map', 'a/b testing', 'evaluation framework', 'offline evaluation'
+}
+
+# The JD says you MUST have these (now excluding the specific retrieval ones above)
+MUST_HAVE_SKILLS = {
+    'llm', 'llms', 'large language models', 'large language model',
+} | RETRIEVAL_RANKING_SKILLS | EVALUATION_METRICS
+
+# Removed generic frameworks from nice-to-have, kept specific finetuning/serving
 NICE_TO_HAVE_SKILLS = {
     'fine-tuning', 'fine tuning', 'finetuning', 'lora', 'qlora', 'peft',
     'xgboost', 'lightgbm', 'gradient boosting',
     'recommendation', 'recommendation systems', 'recommendation engine',
-    'langchain', 'llamaindex', 'llama index', 'haystack',
     'distributed systems', 'inference optimization', 'model serving',
     'hr-tech', 'hrtech', 'recruiting', 'talent',
 }
 
+# Langchain wrapper specific (used for penalty if no foundational skills)
+LANGCHAIN_WRAPPER_SKILLS = {
+    'langchain', 'llamaindex', 'llama index', 'haystack'
+}
+
+# Generic AI / Frameworks (Demoted in weight)
 CORE_ML = {
     'machine learning', 'deep learning', 'nlp',
     'natural language processing', 'transformers', 'transformer',
@@ -207,31 +220,8 @@ def detect_honeypot(cand):
 def is_hard_disqualified(cand):
     """Rule-based disqualifications from the JD."""
     career = cand.get('career_history', [])
-    profile = cand.get('profile', {})
-    skills = cand.get('skills', [])
-
     if not career:
         return True, "no_career_history"
-
-    # All-consulting career
-    all_consulting = True
-    for job in career:
-        comp = job.get('company', '').lower()
-        if not any(cf in comp for cf in CONSULTING_FIRMS):
-            all_consulting = False
-            break
-    if all_consulting and len(career) >= 2:
-        return True, "consulting_only"
-
-    # All-academic career (JD: "pure research without production deployment")
-    academic_terms = {'researcher', 'postdoc', 'phd', 'graduate research',
-                      'research assistant', 'fellow', 'professor', 'lecturer'}
-    all_academic = all(
-        any(at in job.get('title', '').lower() for at in academic_terms)
-        for job in career
-    )
-    if all_academic and len(career) >= 2:
-        return True, "pure_research"
 
     return False, ""
 
@@ -320,6 +310,16 @@ def extract_rich_features(cand):
             else:
                 title_score = 0.1
     features['title_relevance'] = title_score
+
+    # ── NEW: RETRIEVAL & RANKING SKILLS (0-1.0) ──
+    ret_skill_hits = _fuzzy_match_count(RETRIEVAL_RANKING_SKILLS, skill_names)
+    ret_text_hits = _text_match_count(RETRIEVAL_RANKING_SKILLS, full_text)
+    features['retrieval_ranking_skills'] = min((ret_skill_hits + ret_text_hits * 0.5) / 5.0, 1.0)
+
+    # ── NEW: EVALUATION METRICS (0-1.0) ──
+    eval_skill_hits = _fuzzy_match_count(EVALUATION_METRICS, skill_names)
+    eval_text_hits = _text_match_count(EVALUATION_METRICS, full_text)
+    features['evaluation_metrics'] = min((eval_skill_hits + eval_text_hits * 0.5) / 2.0, 1.0)
 
     # ── 2. MUST-HAVE SKILLS (0-1.0) ──
     must_skill_hits = _fuzzy_match_count(MUST_HAVE_SKILLS, skill_names)
@@ -433,7 +433,48 @@ def extract_rich_features(cand):
     # ── 13. WRONG DOMAIN PENALTY ──
     wrong_hits = _fuzzy_match_count(WRONG_DOMAIN, skill_names)
     wrong_text = _text_match_count(WRONG_DOMAIN, full_text)
-    features['wrong_domain'] = min((wrong_hits + wrong_text * 0.3) / 4.0, 1.0)
+    wrong_score = min((wrong_hits + wrong_text * 0.3) / 4.0, 1.0)
+    # Mitigate penalty if they actually have strong NLP/IR overlap
+    if features.get('retrieval_ranking_skills', 0) > 0.5:
+        wrong_score *= 0.3 # Reduce penalty drastically
+    features['wrong_domain'] = wrong_score
+
+    # ── NEW PENALTY: CONSULTING ONLY ──
+    all_consulting = True
+    for job in career:
+        comp = job.get('company', '').lower()
+        if not any(cf in comp for cf in CONSULTING_FIRMS):
+            all_consulting = False
+            break
+    features['consulting_only'] = 1.0 if (all_consulting and len(career) >= 1) else 0.0
+
+    # ── NEW PENALTY: PURE RESEARCH ──
+    academic_terms = {'researcher', 'postdoc', 'phd', 'graduate research',
+                      'research assistant', 'fellow', 'professor', 'lecturer'}
+    all_academic = all(
+        any(at in job.get('title', '').lower() for at in academic_terms)
+        for job in career
+    )
+    features['pure_research'] = 1.0 if (all_academic and len(career) >= 1) else 0.0
+
+    # ── NEW PENALTY: ARCHITECTURE ONLY ──
+    # If the latest job is "architect" and there's no mention of python/coding/deployment recently
+    features['architecture_only'] = 0.0
+    if career:
+        latest_job = career[0]
+        ltitle = latest_job.get('title', '').lower()
+        ldesc = latest_job.get('description', '').lower()
+        if 'architect' in ltitle:
+            if not any(ps in ldesc for ps in {'python', 'pytorch', 'tensorflow', 'code', 'deploy', 'pipeline', 'infrastructure'}):
+                features['architecture_only'] = 1.0
+
+    # ── NEW PENALTY: LANGCHAIN WRAPPER ONLY ──
+    lc_hits = _fuzzy_match_count(LANGCHAIN_WRAPPER_SKILLS, skill_names)
+    ret_hits = _fuzzy_match_count(RETRIEVAL_RANKING_SKILLS, skill_names)
+    if lc_hits > 0 and ret_hits == 0:
+        features['langchain_wrapper_only'] = 1.0
+    else:
+        features['langchain_wrapper_only'] = 0.0
 
     # ── 14-20. BEHAVIORAL SIGNALS ──
     rr_rate = signals.get('recruiter_response_rate', 0.0)
@@ -516,40 +557,45 @@ def extract_rich_features(cand):
 
 # Weights derived directly from JD priority ordering
 WEIGHTS = {
-    # PRIMARY: What do they do? (65%)
-    'title_relevance':       0.15,
-    'must_have_skills':      0.15,
+    # PRIMARY: What do they do? (66%)
+    'retrieval_ranking_skills': 0.12,
+    'career_ml_evidence':    0.12,  # Increased for prod deployments
+    'title_relevance':       0.12,
+    'must_have_skills':      0.10,
     'must_have_proficiency': 0.10,
-    'career_ml_evidence':    0.10,
-    'career_ml_titles':      0.08,
-    'core_ml':               0.07,
+    'evaluation_metrics':    0.05,
+    'career_ml_titles':      0.05,
 
     # SECONDARY: Do they fit? (20%)
-    'experience_fit':        0.06,
-    'product_company':       0.05,
-    'production_skills':     0.04,
-    'nice_to_have_skills':   0.03,
-    'career_stability':      0.02,
+    'product_company':       0.10,  # Increased
+    'experience_fit':        0.05,
+    'production_skills':     0.03,
+    'nice_to_have_skills':   0.01,
+    'core_ml':               0.01,  # Decreased generic AI
 
     # TERTIARY: Are they available? (12%)
     'recruiter_response_rate': 0.03,
     'recency':                 0.02,
     'interview_completion_rate': 0.02,
+    'career_stability':      0.02,
     'notice_fit':              0.01,
     'open_to_work':            0.01,
     'github_activity':         0.01,
     'recruiter_interest':      0.01,
     'location_fit':            0.01,
 
-    # MINOR (3%)
-    'education_relevance':   0.02,
+    # MINOR (2%)
+    'education_relevance':   0.01,
     'profile_completeness':  0.01,
 }
 
-# Penalty weights (subtracted / multiplied)
 PENALTY_WEIGHTS = {
-    'keyword_stuffing': 0.30,  # Heavy penalty
-    'wrong_domain':     0.15,  # Moderate penalty
+    'consulting_only':        0.40,
+    'pure_research':          0.40,
+    'keyword_stuffing':       0.30,
+    'architecture_only':      0.20,
+    'langchain_wrapper_only': 0.15,
+    'wrong_domain':           0.20,
 }
 
 
@@ -613,37 +659,57 @@ def generate_reasoning(cand, features, score, rank):
 
     # Strengths
     strengths = []
-    if features.get('must_have_skills', 0) > 0.5:
-        strengths.append(f"strong match on JD must-haves ({skill_str})")
-    elif features.get('core_ml', 0) > 0.3:
-        strengths.append(f"solid ML foundation ({skill_str})")
-
-    if features.get('career_ml_evidence', 0) > 0.5:
-        strengths.append("demonstrated production ML deployment experience")
-    if features.get('product_company', 0) > 0.3 and career_str:
-        strengths.append(f"product-company background ({career_str})")
+    
+    # 1. Retrieval/Ranking
+    if features.get('retrieval_ranking_skills', 0) > 0.6:
+        strengths.append(f"demonstrated ability to build production retrieval/ranking systems using {skill_str}")
+    elif features.get('must_have_skills', 0) > 0.5:
+        strengths.append(f"strong foundation in JD requirements ({skill_str})")
+        
+    # 2. Evaluation
+    if features.get('evaluation_metrics', 0) > 0.5:
+        strengths.append("proven background in ranking evaluation (NDCG, MAP, MRR)")
+        
+    # 3. Production Deployments
+    if features.get('career_ml_evidence', 0) > 0.6:
+        strengths.append("proven product-scale ML deployment experience")
+        
+    # 4. Product Company
+    if features.get('product_company', 0) > 0.5 and career_str:
+        strengths.append(f"strong product-company background ({career_str})")
 
     if strengths:
         parts.append("; ".join(strengths))
 
     # Concerns
     concerns = []
+    
+    # Penalties
+    if features.get('consulting_only', 0) > 0.5:
+        concerns.append("background is exclusively in consulting rather than product engineering")
+    if features.get('pure_research', 0) > 0.5:
+        concerns.append("background is purely academic research without production engineering")
+    if features.get('architecture_only', 0) > 0.5:
+        concerns.append("recent roles appear to be architecture-only without hands-on coding")
+    if features.get('langchain_wrapper_only', 0) > 0.5:
+        concerns.append("experience heavily relies on LLM wrappers (LangChain) without foundational retrieval systems")
+    if features.get('wrong_domain', 0) > 0.5:
+        concerns.append("primary domain appears to be CV/speech rather than NLP/retrieval")
+    if features.get('keyword_stuffing', 0) > 0.3:
+        concerns.append("some skill claims lack career evidence")
+
+    # Fit concerns
     if features.get('experience_fit', 0) < 0.5:
         if yoe < 4:
             concerns.append(f"relatively junior ({yoe:.0f}yr vs 5-9yr preferred)")
         elif yoe > 12:
             concerns.append(f"may be over-experienced ({yoe:.0f}yr vs 5-9yr sweet spot)")
 
-    if features.get('keyword_stuffing', 0) > 0.3:
-        concerns.append("some skill claims lack career evidence")
-
     if rr is not None and 0 <= rr < 0.2:
         concerns.append(f"low recruiter responsiveness ({rr*100:.0f}%)")
     if notice > 60:
         concerns.append(f"extended notice period ({notice}d)")
 
-    if features.get('wrong_domain', 0) > 0.3:
-        concerns.append("primary domain appears to be CV/speech rather than NLP/retrieval")
 
     if concerns:
         parts.append("Concerns: " + "; ".join(concerns))
