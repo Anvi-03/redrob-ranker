@@ -214,6 +214,16 @@ def detect_honeypot(cand):
     if len(skills) > 20 and len(career) <= 1 and yoe < 2:
         return True, f"skill_inflation({len(skills)} skills, {yoe}yr, {len(career)} jobs)"
 
+    # 6. Identical job descriptions across multiple companies
+    seen_descs = set()
+    for job in career:
+        desc = job.get('description', '').strip()
+        # Only check substantial descriptions (ignore empty or very short ones)
+        if len(desc) > 50:
+            if desc in seen_descs:
+                return True, "duplicate_job_descriptions"
+            seen_descs.add(desc)
+
     return False, ""
 
 
