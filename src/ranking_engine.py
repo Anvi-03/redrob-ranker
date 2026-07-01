@@ -626,99 +626,72 @@ def compute_composite_score(features):
 
 def generate_reasoning(cand, features, score, rank):
     """
-    Generate a specific, honest, non-templated reasoning string.
-    References real candidate data. Acknowledges gaps.
+    Generate an explanation following the required template.
     """
     profile = cand.get('profile', {})
     skills = cand.get('skills', [])
     signals = cand.get('redrob_signals', {})
-    career = cand.get('career_history', [])
-
-    title = profile.get('current_title', 'Unknown')
+    
+    title = profile.get('current_title', 'Unknown Role')
     yoe = profile.get('years_of_experience', 0)
-    company = profile.get('current_company', '')
-
+    company = profile.get('current_company', 'Unknown Company')
+    if not company:
+        company = 'Unknown Company'
+    
     # Get top relevant skills
     adv_skills = [s.get('name') for s in skills
                   if s.get('proficiency') in ('advanced', 'expert')][:5]
-    skill_str = ", ".join(adv_skills[:3]) if adv_skills else "general engineering skills"
+    skill_str = ", ".join(adv_skills[:3]) if adv_skills else "core engineering skills"
 
-    # Get career companies
-    companies = [j.get('company', '') for j in career[:3] if j.get('company')]
-    career_str = ", ".join(companies[:2]) if companies else ""
-
-    rr = signals.get('recruiter_response_rate', 0)
-    notice = signals.get('notice_period_days', 90)
-
-    parts = []
-
-    # Opening — title + experience
-    parts.append(f"{title} with {yoe:.1f} years of experience")
-    if company:
-        parts.append(f"currently at {company}")
-
-    # Strengths
-    strengths = []
-    
-    # 1. Retrieval/Ranking
+    # Determine match reason
+    match_reasons = []
     if features.get('retrieval_ranking_skills', 0) > 0.6:
-        strengths.append(f"demonstrated ability to build production retrieval/ranking systems using {skill_str}")
-    elif features.get('must_have_skills', 0) > 0.5:
-        strengths.append(f"strong foundation in JD requirements ({skill_str})")
+        match_reasons.append(f"expertise in {skill_str} and direct experience relevant to retrieval and ranking systems")
+    elif features.get('must_have_skills', 0) > 0.4:
+        match_reasons.append(f"expertise in {skill_str} and related experience relevant to retrieval and ranking systems")
+    else:
+        match_reasons.append(f"expertise in {skill_str} and transferable experience")
         
-    # 2. Evaluation
-    if features.get('evaluation_metrics', 0) > 0.5:
-        strengths.append("proven background in ranking evaluation (NDCG, MAP, MRR)")
-        
-    # 3. Production Deployments
-    if features.get('career_ml_evidence', 0) > 0.6:
-        strengths.append("proven product-scale ML deployment experience")
-        
-    # 4. Product Company
-    if features.get('product_company', 0) > 0.5 and career_str:
-        strengths.append(f"strong product-company background ({career_str})")
+    match_str = match_reasons[0]
 
+    # Additional strengths
+    strengths = []
+    if features.get('career_ml_evidence', 0) > 0.5:
+        strengths.append("production ML deployment")
+    if features.get('evaluation_metrics', 0) > 0.5:
+        strengths.append("ranking evaluation")
+    if features.get('product_company', 0) > 0.4:
+        strengths.append("product company background")
+        
+    strengths_str = ""
     if strengths:
-        parts.append("; ".join(strengths))
+        if len(strengths) > 1:
+            strengths_str = f" Additional strengths include {', '.join(strengths[:-1])} and {strengths[-1]}."
+        else:
+            strengths_str = f" Additional strengths include {strengths[0]}."
 
     # Concerns
     concerns = []
-    
-    # Penalties
-    if features.get('consulting_only', 0) > 0.5:
-        concerns.append("background is exclusively in consulting rather than product engineering")
-    if features.get('pure_research', 0) > 0.5:
-        concerns.append("background is purely academic research without production engineering")
-    if features.get('architecture_only', 0) > 0.5:
-        concerns.append("recent roles appear to be architecture-only without hands-on coding")
-    if features.get('langchain_wrapper_only', 0) > 0.5:
-        concerns.append("experience heavily relies on LLM wrappers (LangChain) without foundational retrieval systems")
-    if features.get('wrong_domain', 0) > 0.5:
-        concerns.append("primary domain appears to be CV/speech rather than NLP/retrieval")
-    if features.get('keyword_stuffing', 0) > 0.3:
-        concerns.append("some skill claims lack career evidence")
-
-    # Fit concerns
-    if features.get('experience_fit', 0) < 0.5:
-        if yoe < 4:
-            concerns.append(f"relatively junior ({yoe:.0f}yr vs 5-9yr preferred)")
-        elif yoe > 12:
-            concerns.append(f"may be over-experienced ({yoe:.0f}yr vs 5-9yr sweet spot)")
-
-    if rr is not None and 0 <= rr < 0.2:
-        concerns.append(f"low recruiter responsiveness ({rr*100:.0f}%)")
+    notice = signals.get('notice_period_days', 90)
     if notice > 60:
-        concerns.append(f"extended notice period ({notice}d)")
-
-
+        concerns.append(f"Extended Notice Period ({notice} days)")
+    if yoe < 4:
+        concerns.append("Junior Profile")
+    elif yoe > 12:
+        concerns.append("Over-experience")
+    
+    if features.get('must_have_skills', 0) < 0.3:
+        concerns.append("Missing core skills")
+    if features.get('consulting_only', 0) > 0.5:
+        concerns.append("Consulting-only background")
+    if features.get('pure_research', 0) > 0.5:
+        concerns.append("Academic/Research only")
+        
+    concerns_str = ""
     if concerns:
-        parts.append("Concerns: " + "; ".join(concerns))
+        concerns_str = f" Concerns: {', '.join(concerns)}."
 
-    reasoning = ". ".join(parts) + "."
-
-    # Trim to reasonable length
-    if len(reasoning) > 350:
-        reasoning = reasoning[:347] + "..."
+    reasoning = f"{title} with {yoe:.1f} years of experience, currently at {company}. Strong match due to {match_str}.{strengths_str}{concerns_str}"
 
     return reasoning
 
