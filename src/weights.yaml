@@ -1,0 +1,17 @@
+# ==============================================================================
+# FALLBACK WEIGHTS ONLY
+# ==============================================================================
+# These weights are only used when no trained model exists yet (e.g., cold start,
+# first run, or if someone clones the repo without retraining).
+# 
+# Once artifacts/reranker_model.txt exists, scoring.py uses the trained LightGBM
+# model's learned weighting instead of these values.
+# ==============================================================================
+
+semantic_similarity: 0.25
+skills_match: 0.15
+experience_relevance: 0.20
+career_trajectory: 0.10
+recency: 0.10
+engagement_signals: 0.10
+location_fit: 0.10
