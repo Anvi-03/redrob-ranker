@@ -1,105 +1,127 @@
-# Redrob Data & AI Challenge - Resume Predictor & Reranker
+# Redrob AI Challenge — Intelligent Candidate Discovery & Ranking
 
-This repository contains the production-ready machine learning pipeline for the **Redrob Resume Predictor** challenge. The objective of this system is to rank 100,000 candidate profiles against a specific "Senior AI Engineer" job description within strict computational limits (under 5 minutes, single CPU, < 16GB RAM).
+A **production-grade multi-stage ranking engine** that discovers and ranks the top 100 candidates from a 100K candidate pool against a Senior AI Engineer job description.
 
-The system uses a highly optimized **LambdaMART (LightGBM) Learning-to-Rank** model, trained on synthetic labeled data that strictly adheres to the JD's requirements, catching "honeypots" and "keyword-stuffer" traps along the way.
+## 🏗 Architecture
+
+```
+Pre-computation (offline, one-time):
+  sentence-transformers (all-MiniLM-L6-v2)
+    → 100K candidate embeddings (384-dim)
+    → FAISS IndexFlatIP for semantic retrieval
+
+Ranking Pipeline (online, <60s on CPU):
+  Stage 1: FAISS Semantic Retrieval → top 1500 by cosine similarity
+  Stage 2: Hard Filters (honeypots, consulting-only, pure-research)
+  Stage 3: Rich Feature Extraction (25+ features per candidate)
+  Stage 4: Weighted Composite Scoring (JD-derived weights)
+  Stage 5: Dynamic Reasoning Generation (per-candidate, non-templated)
+```
+
+### Key Design Decisions
+
+| Decision | Rationale |
+|---|---|
+| **Heuristic scoring over LightGBM** | Training on self-labeled data causes train/serve skew. Direct scoring uses richer signals and is fully transparent. |
+| **Sentence-transformer pre-computation** | Enables true semantic similarity (not keyword matching) while respecting the 5-min CPU runtime constraint. |
+| **FAISS recall stage** | Reduces candidate pool from 100K → 1500 before expensive feature extraction, keeping runtime under budget. |
+| **25+ features** | Each JD requirement mapped to a measurable signal: title relevance, must-have skills (proficiency-weighted), career ML evidence, product company experience, keyword stuffing detection, behavioral signals. |
+| **Keyword stuffing penalty** | Explicitly penalizes profiles where claimed skills lack career evidence — the JD warns this is a trap. |
 
 ---
 
-## 🛠 Prerequisites & Environment Setup
+## 🛠 Setup
 
-This project uses standard data science libraries and runs purely locally. It requires Python 3.9+.
+```bash
+# Clone and enter directory
+cd redrob-ranker
 
-1. **Clone the repository and enter the directory:**
-   ```bash
-   cd resume-predictor
-   ```
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate
 
-2. **Create a virtual environment (recommended):**
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. **Install the dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-   *Core libraries: `pandas`, `numpy`, `lightgbm`, `scikit-learn`*
+# Install dependencies
+pip install -r requirements.txt
+```
 
 ---
 
-## 🚀 Running the Production Pipeline
+## 🚀 Running
 
-### Option A: Fast Scoring (Generate Submission Directly)
-Since the `artifacts/reranker_model.txt` is already committed to the repository, you do **not** need to retrain the model. You can generate the submission CSV immediately.
+### Option A: Full Pipeline (Recommended)
 
-**Important:** Before running this step, ensure that the massive 100k `candidates.jsonl` file is placed directly in the **root folder** of the project (`resume-predictor/candidates.jsonl`).
+**Step 1: Place candidate data in root folder**
+Put `candidates.jsonl` or `candidates_diverse_1000.csv` in the root directory.
+
+**Step 2: Pre-compute embeddings (one-time, ~15-30 min on CPU)**
+```bash
+cd src
+python3 precompute_embeddings.py
+```
+This generates `artifacts/faiss_index.bin`, `artifacts/candidate_embeddings.npy`, etc.
+
+**Step 3: Generate submission**
+```bash
+cd src
+OMP_NUM_THREADS=1 python3 scoring.py
+```
+Output: `submission.csv` in root directory.
+
+### Option B: Heuristic-Only (No Pre-computation)
+
+If you skip the embedding step, the pipeline automatically falls back to pure heuristic scoring over all 100K candidates. This still produces good rankings but without the semantic retrieval stage.
 
 ```bash
 cd src
 OMP_NUM_THREADS=1 python3 scoring.py
 ```
-*Outputs: `submission.csv` (in the root directory)*
 
 ---
 
-### Option B: Full Pipeline (Retraining from Scratch)
-If you want to test the entire process from generating the synthetic training labels all the way to scoring, follow these steps sequentially:
+## 📁 Project Structure
 
-**Step 1: Generate the Training Dataset**
-This script scans the 100k candidates, applies strict heuristic rules derived directly from the Job Description, and generates a diverse dataset of 1,000 auto-labeled candidates (0.0 to 3.0 scale). It actively detects impossible profiles (honeypots) and gives them a score of `0.0`.
-
-```bash
-cd src
-python3 generate_training_candidates.py
 ```
-*Outputs: `data/training_candidates_labeled.csv`*
-
-**Step 2: Train the Reranker Model**
-This script extracts numerical features from the labeled candidates and trains a `lambdarank` LightGBM model. It performs 5-fold cross-validation, reports NDCG metrics, and saves the final model artifacts.
-
-*(Note: On macOS ARM / Apple Silicon, LightGBM OpenMP might crash silently. We use `OMP_NUM_THREADS=1` to ensure stability.)*
-
-```bash
-cd src
-OMP_NUM_THREADS=1 python3 train_reranker.py
+├── README.md
+├── requirements.txt
+├── submission.csv                    # Final output
+├── candidates_diverse_1000.csv       # Input dataset (100K candidates)
+├── artifacts/
+│   ├── reranker_model.txt            # LightGBM model (optional)
+│   ├── faiss_index.bin               # FAISS vector index (pre-computed)
+│   ├── candidate_embeddings.npy      # Dense embeddings (pre-computed)
+│   ├── candidate_ids.npy             # Candidate ID mapping
+│   └── jd_embedding.npy             # JD embedding
+├── src/
+│   ├── scoring.py                    # Main entry point — multi-stage pipeline
+│   ├── ranking_engine.py             # Core: features, scoring, reasoning
+│   ├── precompute_embeddings.py      # Pre-computation: embeddings + FAISS
+│   ├── train_reranker.py             # LightGBM training (optional)
+│   ├── generate_training_candidates.py  # Training data generation
+│   └── features.py                   # Legacy feature extraction
+└── data/
+    └── training_candidates_labeled.csv  # Labeled training data
 ```
-*Outputs:*
-- *Model Weights: `artifacts/reranker_model.txt`*
-- *Training Report: `artifacts/reranker_training_report.md`*
-
-**Step 3: Score and Generate Submission**
-Finally, apply the newly trained model across all 100k candidates. Ensure `candidates.jsonl` is in the root folder.
-
-```bash
-cd src
-OMP_NUM_THREADS=1 python3 scoring.py
-```
-*Outputs: `submission.csv` (in the root directory)*
 
 ---
 
-## 🧠 System Architecture & Methodology
+## 🧠 Feature Engineering (25+ Features)
 
-### 1. Labeling Strategy (`generate_training_candidates.py`)
-To train a supervised ranking model without manually labeling thousands of resumes, we built a strict heuristic labeler:
-- **Perfect Fit (2.5 - 3.0):** Candidates with ML/AI titles, 5-9 years of experience, production-level retrieval/ranking skills (e.g., LlamaIndex, Elasticsearch, Milvus), and product company backgrounds.
-- **Honeypots / Disqualified (0.0):** Candidates who claim 12 years of experience but only have 1 year of career history, or "keyword stuffers" who list AI skills but have irrelevant titles (e.g., HR Manager, Graphic Designer).
+| Category | Features | Weight |
+|---|---|---|
+| **Role Match** | `title_relevance`, `career_ml_titles` | 23% |
+| **Skill Match** | `must_have_skills`, `must_have_proficiency`, `core_ml`, `nice_to_have_skills`, `production_skills` | 39% |
+| **Career Quality** | `career_ml_evidence`, `product_company`, `career_stability` | 17% |
+| **Experience** | `experience_fit` | 6% |
+| **Behavioral** | `recruiter_response_rate`, `recency`, `interview_completion_rate`, `notice_fit`, `open_to_work`, `github_activity`, `recruiter_interest`, `location_fit` | 12% |
+| **Education** | `education_relevance`, `profile_completeness` | 3% |
+| **Penalties** | `keyword_stuffing` (-30%), `wrong_domain` (-15%) | Subtractive |
 
-### 2. Feature Engineering (`features.py`)
-Rather than heavy LLM API calls (which violate the constraint of running without network access), we extract dense signals:
-- **Semantic Similarity:** Keyword density of ML, Tech, and Production terms matched against the candidate's career descriptions.
-- **Experience Relevance:** Maps the candidate's YoE to the JD's "sweet spot" (5-9 years).
-- **Career Trajectory:** Penalizes "title chasers" who hop jobs every few months.
-- **Engagement Signals:** Aggregates recruiter response rates and platform recency.
+---
 
-### 3. Model Architecture (`train_reranker.py`)
-We use **LightGBM** with the `lambdarank` objective.
-- Unlike traditional regression, `lambdarank` optimizes directly for ranking metrics like **NDCG@10**.
-- The model successfully learns that `semantic_similarity` and `experience_relevance` are the strongest predictors of a top-tier candidate.
+## 🛡 Anti-Gaming Measures
 
-### 4. High-Performance Scoring (`scoring.py`)
-- Processes the 100,000-line JSONL file using a stream reader to keep RAM usage well under the 16GB limit.
-- Total processing and scoring takes **< 60 seconds** on a standard CPU.
-- Automatically generates customized reasoning for the Top 100 candidates based on their rank and extracted skill overlap.
+1. **Honeypot Detection**: Expert skills with 0 months used, impossible job tenures, career/YoE mismatches
+2. **Keyword Stuffing Penalty**: High skill count relative to YoE, skills with no career evidence, irrelevant title + ML skills
+3. **Wrong Domain Penalty**: CV/speech/robotics skills when JD needs NLP/retrieval
+4. **Title Chaser Detection**: Average tenure < 18 months across 3+ jobs
+5. **Consulting-Only Filter**: Pure TCS/Infosys/Wipro careers with no product exposure
