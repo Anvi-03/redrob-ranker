@@ -311,7 +311,7 @@ def main():
     # ── Process candidates ──
     logging.info("Stage 2-3: Feature extraction and scoring...")
 
-    scored_candidates = []
+    scored_candidates_map = {}
     filtered_count = 0
     total_count = 0
 
@@ -344,12 +344,14 @@ def main():
             # Add semantic similarity to the score (weighted at 15%)
             score += features['semantic_similarity'] * 0.15
 
-        scored_candidates.append({
-            'cand': cand,
-            'score': score,
-            'features': features,
-        })
+        if cid not in scored_candidates_map or score > scored_candidates_map[cid]['score']:
+            scored_candidates_map[cid] = {
+                'cand': cand,
+                'score': score,
+                'features': features,
+            }
 
+    scored_candidates = list(scored_candidates_map.values())
     logging.info(f"  Processed {total_count} candidates, filtered {filtered_count}")
     logging.info(f"  {len(scored_candidates)} candidates scored")
 
