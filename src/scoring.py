@@ -10,11 +10,15 @@ import logging
 from features import extract_features
 from filters import is_honeypot, is_disqualified
 
+# Base paths
+SRC_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(SRC_DIR)
+
 # Config
-CANDIDATES_FILE = "../[PUB] India_runs_data_and_ai_challenge/India_runs_data_and_ai_challenge/candidates.jsonl"
-MODEL_FILE = "../artifacts/reranker_model.txt"
-WEIGHTS_FILE = "weights.yaml"
-OUTPUT_FILE = "../submission.csv"
+CANDIDATES_FILE = os.path.join(ROOT_DIR, "candidates.jsonl")
+MODEL_FILE = os.path.join(ROOT_DIR, "artifacts", "reranker_model.txt")
+WEIGHTS_FILE = os.path.join(SRC_DIR, "weights.yaml")
+OUTPUT_FILE = os.path.join(ROOT_DIR, "submission.csv")
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 

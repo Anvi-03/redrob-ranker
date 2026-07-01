@@ -55,9 +55,12 @@ OMP_NUM_THREADS=1 python3 train_reranker.py
 - *Training Report: `artifacts/reranker_training_report.md`*
 
 ### Step 3: Score and Generate Submission
-This script applies the trained LightGBM model across all 100,000 candidates in real-time. It filters out disqualifiers, computes feature vectors, predicts scores, and outputs the top 100 candidates ranked, along with dynamic reasoning text for each candidate.
+This script applies the trained LightGBM model across all 100,000 candidates.
+
+**Important:** Before running this step, ensure that the `candidates.jsonl` file containing the 100k candidates is placed directly in the **root folder** of the project (`resume-predictor/candidates.jsonl`).
 
 ```bash
+cd src
 OMP_NUM_THREADS=1 python3 scoring.py
 ```
 *Outputs: `submission.csv` (in the root directory)*
