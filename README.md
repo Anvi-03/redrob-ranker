@@ -60,7 +60,18 @@ pip install -r requirements.txt
 
 ## 🚀 Running
 
-### Option A: Full Pipeline (Recommended)
+### Option A: Hugging Face Space Sandbox (For Reviewers)
+
+**Step 1:** Visit the deployed Web UI at: [https://huggingface.co/spaces/Alex-Ankush/retdrob-ranker](https://huggingface.co/spaces/Alex-Ankush/retdrob-ranker)
+**Step 2:** Upload your candidate dataset (`candidates.jsonl` or `candidates_diverse_1000.csv`).
+**Step 3:** Click **Run Ranking Pipeline**.
+**Step 4:** Download the generated `submission.csv` directly from the interface.
+
+*(Note: To meet GitHub file size limits, the large pre-computed FAISS index artifacts are excluded from the repository. The Hugging Face Space automatically detects this and gracefully falls back to the pure heuristic scoring pipeline, which produces excellent rankings entirely on CPU within the time limit).*
+
+---
+
+### Option B: Full Pipeline Local (Recommended for Dev)
 
 **Step 1: Place candidate data in root folder**
 Put `candidates.jsonl` or `candidates_diverse_1000.csv` in the root directory.
