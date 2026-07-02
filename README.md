@@ -7,6 +7,7 @@ sdk: gradio
 sdk_version: "4.20.1"
 app_file: app.py
 pinned: false
+python_version: 3.11
 ---
 
 # Redrob AI Challenge — Intelligent Candidate Discovery & Ranking
