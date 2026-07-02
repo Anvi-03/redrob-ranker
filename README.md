@@ -1,3 +1,14 @@
+---
+title: Redrob Ranker
+emoji: 🚀
+colorFrom: blue
+colorTo: indigo
+sdk: gradio
+sdk_version: "4.20.1"
+app_file: app.py
+pinned: false
+---
+
 # Redrob AI Challenge — Intelligent Candidate Discovery & Ranking
 
 A **production-grade multi-stage ranking engine** that discovers and ranks the top 100 candidates from a 100K candidate pool against a Senior AI Engineer job description.
