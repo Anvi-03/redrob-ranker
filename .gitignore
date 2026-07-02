@@ -1,5 +1,9 @@
+venv/
 __pycache__/
 *.pyc
-venv/
-[PUB]*
 .DS_Store
+candidates*.csv
+*.jsonl
+submission*.csv
+artifacts/*.npy
+artifacts/*.bin
